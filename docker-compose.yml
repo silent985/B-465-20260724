@@ -1,0 +1,74 @@
+name: lottery-app
+
+services:
+  # 数据库服务
+  db:
+    image: mysql:8.0
+    container_name: lottery-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: lottery_db
+      MYSQL_USER: lottery
+      MYSQL_PASSWORD: lottery123
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - lottery-network
+
+  # 后端服务
+  backend:
+    build: ./backend
+    container_name: lottery-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=lottery_db
+      - DB_USERNAME=root
+      - DB_PASSWORD=root123
+      - TZ=Asia/Shanghai
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - lottery-network
+
+  # 前端服务
+  frontend:
+    build: ./frontend
+    container_name: lottery-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - lottery-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  lottery-network:
+    driver: bridge
