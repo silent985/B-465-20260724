@@ -1,15 +1,20 @@
 package com.lottery.controller;
 
 import com.lottery.dto.ApiResponse;
+import com.lottery.dto.CheckInResultDTO;
+import com.lottery.dto.CheckInStatusDTO;
 import com.lottery.dto.UserDTO;
 import com.lottery.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -19,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "用户接口", description = "用户相关的API接口")
 public class UserController {
 
@@ -93,6 +99,22 @@ public class UserController {
             @Parameter(description = "用户ID") @PathVariable Long id) {
         UserDTO user = userService.toggleEnabled(id);
         return ApiResponse.success("状态切换成功", user);
+    }
+
+    @PostMapping("/{id}/check-in")
+    @Operation(summary = "每日签到", description = "普通用户每日签到，签到成功后增加1次抽奖机会，每日仅可签到一次，管理员不可签到")
+    public ApiResponse<CheckInResultDTO> checkIn(
+            @Parameter(description = "用户ID") @PathVariable @NotNull(message = "用户ID不能为空") @Min(value = 1, message = "用户ID必须大于0") Long id) {
+        CheckInResultDTO result = userService.checkIn(id);
+        return ApiResponse.success(result.getMessage(), result);
+    }
+
+    @GetMapping("/{id}/check-in/status")
+    @Operation(summary = "获取签到状态", description = "获取普通用户今日签到状态和剩余抽奖次数，管理员不可签到")
+    public ApiResponse<CheckInStatusDTO> getCheckInStatus(
+            @Parameter(description = "用户ID") @PathVariable @NotNull(message = "用户ID不能为空") @Min(value = 1, message = "用户ID必须大于0") Long id) {
+        CheckInStatusDTO status = userService.getCheckInStatus(id);
+        return ApiResponse.success(status);
     }
 
     @DeleteMapping("/{id}")
