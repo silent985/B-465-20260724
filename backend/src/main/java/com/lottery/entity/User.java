@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -65,6 +66,12 @@ public class User {
     @Column(nullable = false)
     @Builder.Default
     private Integer remainingChances = 10;
+
+    /**
+     * 最近一次签到日期（用于每日签到领取抽奖次数）
+     */
+    @Column
+    private LocalDate lastSignInDate;
 
     /**
      * 用户角色: ADMIN, USER

@@ -1,6 +1,7 @@
 package com.lottery.controller;
 
 import com.lottery.dto.ApiResponse;
+import com.lottery.dto.SignInDTO;
 import com.lottery.dto.UserDTO;
 import com.lottery.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -85,6 +86,22 @@ public class UserController {
             @Parameter(description = "增加数量") @RequestParam int count) {
         UserDTO user = userService.addChances(id, count);
         return ApiResponse.success("增加成功", user);
+    }
+
+    @PostMapping("/{id}/sign-in")
+    @Operation(summary = "每日签到", description = "用户每日签到领取1次抽奖机会，每天仅可签到一次")
+    public ApiResponse<SignInDTO> signIn(
+            @Parameter(description = "用户ID") @PathVariable Long id) {
+        SignInDTO result = userService.signIn(id);
+        return ApiResponse.success(result.getMessage(), result);
+    }
+
+    @GetMapping("/{id}/sign-in-status")
+    @Operation(summary = "查询签到状态", description = "查询用户今日是否已签到及剩余抽奖次数")
+    public ApiResponse<SignInDTO> getSignInStatus(
+            @Parameter(description = "用户ID") @PathVariable Long id) {
+        SignInDTO result = userService.getSignInStatus(id);
+        return ApiResponse.success(result);
     }
 
     @PatchMapping("/{id}/toggle")

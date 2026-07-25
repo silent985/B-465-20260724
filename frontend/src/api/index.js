@@ -180,6 +180,20 @@ export const addChances = (userId, count) => {
 }
 
 /**
+ * 每日签到领取抽奖次数
+ */
+export const signIn = (userId) => {
+  return api.post(`/users/${userId}/sign-in`)
+}
+
+/**
+ * 查询今日签到状态
+ */
+export const getSignInStatus = (userId) => {
+  return api.get(`/users/${userId}/sign-in-status`)
+}
+
+/**
  * 切换用户状态
  */
 export const toggleUser = (id) => {

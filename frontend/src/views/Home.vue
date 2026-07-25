@@ -51,6 +51,33 @@
         <p class="sub-title">每一次转动都是一次惊喜</p>
       </div>
 
+      <!-- 每日签到（仅普通用户可见） -->
+      <div class="sign-in-card glass-card" v-if="canSignIn">
+        <div class="sign-in-info">
+          <span class="sign-in-icon">📅</span>
+          <div class="sign-in-text">
+            <div class="sign-in-status">
+              今日签到：
+              <span :class="['status-tag', signedInToday ? 'done' : 'todo']">
+                {{ signedInToday ? '已签到' : '未签到' }}
+              </span>
+            </div>
+            <div class="sign-in-chances">
+              剩余抽奖次数：<span class="chances-num">{{ userStore.remainingChances }}</span>
+            </div>
+          </div>
+        </div>
+        <el-button
+          type="primary"
+          round
+          :loading="signInLoading"
+          :disabled="signedInToday"
+          @click="handleSignIn"
+        >
+          {{ signedInToday ? '今日已签到' : '签到领取次数' }}
+        </el-button>
+      </div>
+
       <!-- 中奖滚动公告 -->
       <div class="winner-marquee glass-card" v-if="recentWinners.length > 0">
         <div class="marquee-content">
@@ -147,7 +174,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { List, User, Setting, SwitchButton } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { getEnabledPrizes, getRecentWinners, drawLottery } from '@/api'
+import { getEnabledPrizes, getRecentWinners, drawLottery, signIn, getSignInStatus } from '@/api'
 import LotteryWheel from '@/components/LotteryWheel.vue'
 import LotteryGrid from '@/components/LotteryGrid.vue'
 
@@ -161,6 +188,13 @@ const lotteryMode = ref('wheel')
 const isSpinning = ref(false)
 const showResultDialog = ref(false)
 const resultData = ref(null)
+
+// 签到状态
+const signedInToday = ref(false)
+const signInLoading = ref(false)
+
+// 仅登录的普通用户（非管理员）可参与签到
+const canSignIn = computed(() => userStore.isLoggedIn && !userStore.isAdmin)
 
 // 组件引用
 const wheelRef = ref(null)
@@ -216,6 +250,36 @@ const loadRecentWinners = async () => {
     recentWinners.value = res.data
   } catch (e) {
     console.error('加载中奖记录失败:', e)
+  }
+}
+
+// 加载签到状态
+const loadSignInStatus = async () => {
+  if (!canSignIn.value) return
+  try {
+    const res = await getSignInStatus(userStore.user.id)
+    signedInToday.value = res.data.signedInToday
+    userStore.updateChances(res.data.remainingChances)
+  } catch (e) {
+    console.error('加载签到状态失败:', e)
+  }
+}
+
+// 处理签到
+const handleSignIn = async () => {
+  if (!canSignIn.value || signedInToday.value) return
+
+  signInLoading.value = true
+  try {
+    const res = await signIn(userStore.user.id)
+    signedInToday.value = res.data.signedInToday
+    userStore.updateChances(res.data.remainingChances)
+    ElMessage.success(res.message || '签到成功')
+  } catch (e) {
+    // 重复签到等业务异常已由响应拦截器提示
+    console.error('签到失败:', e)
+  } finally {
+    signInLoading.value = false
   }
 }
 
@@ -289,11 +353,12 @@ const handleCommand = (command) => {
 }
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
   loadPrizes()
   loadRecentWinners()
   if (userStore.isLoggedIn) {
-    userStore.refreshUser()
+    await userStore.refreshUser()
+    loadSignInStatus()
   }
 })
 </script>
@@ -424,6 +489,62 @@ onMounted(() => {
 .sub-title {
   color: var(--text-secondary);
   font-size: 16px;
+}
+
+// 每日签到
+.sign-in-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.sign-in-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  .sign-in-icon {
+    font-size: 32px;
+  }
+}
+
+.sign-in-text {
+  .sign-in-status {
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .sign-in-chances {
+    color: var(--text-secondary);
+    font-size: 14px;
+
+    .chances-num {
+      color: #FFD700;
+      font-weight: 700;
+      font-size: 18px;
+    }
+  }
+}
+
+.status-tag {
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+
+  &.done {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+  }
+
+  &.todo {
+    background: rgba(255, 215, 0, 0.2);
+    color: #FFD700;
+  }
 }
 
 // 中奖滚动
