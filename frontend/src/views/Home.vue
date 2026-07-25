@@ -51,6 +51,35 @@
         <p class="sub-title">每一次转动都是一次惊喜</p>
       </div>
 
+      <!-- 每日签到区域 -->
+      <div class="checkin-section glass-card" v-if="userStore.isLoggedIn && userStore.isRegularUser">
+        <div class="checkin-info">
+          <div class="checkin-status">
+            <span class="checkin-icon">{{ userStore.checkedInToday ? '✅' : '📅' }}</span>
+            <div class="checkin-text">
+              <div class="checkin-title">每日签到</div>
+              <div class="checkin-desc">
+                {{ userStore.checkedInToday ? '今日已签到' : '签到领取1次免费抽奖机会' }}
+              </div>
+            </div>
+          </div>
+          <div class="chances-display">
+            <span class="chances-label">剩余抽奖次数</span>
+            <span class="chances-value">{{ userStore.remainingChances }}</span>
+          </div>
+        </div>
+        <el-button
+          type="primary"
+          size="large"
+          :class="['checkin-btn', { 'checked-in': userStore.checkedInToday }]"
+          :disabled="userStore.checkedInToday || userStore.loading"
+          :loading="userStore.loading"
+          @click="handleCheckIn"
+        >
+          {{ userStore.checkedInToday ? '今日已签到' : '立即签到' }}
+        </el-button>
+      </div>
+
       <!-- 中奖滚动公告 -->
       <div class="winner-marquee glass-card" v-if="recentWinners.length > 0">
         <div class="marquee-content">
@@ -288,6 +317,26 @@ const handleCommand = (command) => {
   }
 }
 
+// 处理签到
+const handleCheckIn = async () => {
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('请先登录后再签到')
+    return
+  }
+  if (userStore.checkedInToday) {
+    ElMessage.info('今日已签到，请勿重复签到')
+    return
+  }
+  try {
+    const result = await userStore.doCheckIn()
+    if (result) {
+      ElMessage.success(result.message || '签到成功')
+    }
+  } catch (e) {
+    console.error('签到失败:', e)
+  }
+}
+
 // 初始化
 onMounted(() => {
   loadPrizes()
@@ -424,6 +473,93 @@ onMounted(() => {
 .sub-title {
   color: var(--text-secondary);
   font-size: 16px;
+}
+
+// 每日签到
+.checkin-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+  
+  @media (max-width: 600px) {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+.checkin-info {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  
+  @media (max-width: 600px) {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+.checkin-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkin-icon {
+  font-size: 32px;
+}
+
+.checkin-text {
+  .checkin-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  
+  .checkin-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+}
+
+.chances-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 20px;
+  background: rgba(255, 215, 0, 0.1);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  
+  .chances-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  
+  .chances-value {
+    font-size: 24px;
+    font-weight: 700;
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+.checkin-btn {
+  min-width: 120px;
+  font-weight: 600;
+  background: var(--gradient-accent);
+  border: none;
+  
+  &.checked-in {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+  }
 }
 
 // 中奖滚动

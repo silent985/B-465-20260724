@@ -1,11 +1,16 @@
 package com.lottery.service;
 
+import com.lottery.dto.CheckInResultDTO;
+import com.lottery.dto.CheckInStatusDTO;
 import com.lottery.dto.UserDTO;
+import com.lottery.entity.CheckInRecord;
 import com.lottery.entity.User;
 import com.lottery.exception.BusinessException;
+import com.lottery.repository.CheckInRecordRepository;
 import com.lottery.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +18,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,7 +31,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserService {
 
+    private static final int CHECK_IN_REWARD_CHANCES = 1;
+    private static final String ROLE_USER = "USER";
+
     private final UserRepository userRepository;
+    private final CheckInRecordRepository checkInRecordRepository;
+    private final Clock clock;
 
     /**
      * 用户登录（简化版，实际应使用Spring Security）
@@ -163,6 +175,81 @@ public class UserService {
         }
         userRepository.deleteById(id);
         log.info("删除用户: ID {}", id);
+    }
+
+    /**
+     * 每日签到
+     */
+    @Transactional
+    public CheckInResultDTO checkIn(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+
+        if (!user.getEnabled()) {
+            throw new BusinessException("用户已被禁用");
+        }
+
+        if (!ROLE_USER.equals(user.getRole())) {
+            throw new BusinessException("仅普通用户可签到");
+        }
+
+        LocalDate today = LocalDate.now(clock);
+
+        if (checkInRecordRepository.existsByUserIdAndCheckInDate(userId, today)) {
+            throw new BusinessException("今日已签到，请勿重复签到");
+        }
+
+        CheckInRecord record = CheckInRecord.builder()
+                .userId(userId)
+                .username(user.getUsername())
+                .checkInDate(today)
+                .rewardChances(CHECK_IN_REWARD_CHANCES)
+                .build();
+
+        try {
+            checkInRecordRepository.saveAndFlush(record);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException("今日已签到，请勿重复签到");
+        }
+
+        userRepository.incrementChances(userId, CHECK_IN_REWARD_CHANCES);
+
+        User updatedUser = userRepository.findById(userId).orElse(user);
+
+        log.info("用户 {} 签到成功，获得 {} 次抽奖机会", user.getUsername(), CHECK_IN_REWARD_CHANCES);
+
+        return CheckInResultDTO.builder()
+                .checkedIn(true)
+                .checkInDate(today)
+                .rewardChances(CHECK_IN_REWARD_CHANCES)
+                .remainingChances(updatedUser.getRemainingChances())
+                .message("签到成功，获得" + CHECK_IN_REWARD_CHANCES + "次抽奖机会")
+                .build();
+    }
+
+    /**
+     * 获取签到状态
+     */
+    public CheckInStatusDTO getCheckInStatus(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+
+        if (!user.getEnabled()) {
+            throw new BusinessException("用户已被禁用");
+        }
+
+        if (!ROLE_USER.equals(user.getRole())) {
+            throw new BusinessException("仅普通用户可签到");
+        }
+
+        LocalDate today = LocalDate.now(clock);
+        boolean checkedInToday = checkInRecordRepository.existsByUserIdAndCheckInDate(userId, today);
+
+        return CheckInStatusDTO.builder()
+                .checkedInToday(checkedInToday)
+                .today(today)
+                .remainingChances(user.getRemainingChances())
+                .build();
     }
 
     private UserDTO toDTO(User user) {

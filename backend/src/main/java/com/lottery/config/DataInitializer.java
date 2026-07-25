@@ -161,7 +161,7 @@ public class DataInitializer implements CommandLineRunner {
                     .name("再接再厉")
                     .description("不要灰心，继续努力")
                     .imageUrl("/images/tryagain.png")
-                    .probability(0)  // 填充用
+                    .probability(0)
                     .stock(9999)
                     .prizeLevel(5)
                     .color("#FFA07A")
