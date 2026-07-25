@@ -1,11 +1,15 @@
 package com.lottery.service;
 
+import com.lottery.dto.CheckinResultDTO;
 import com.lottery.dto.UserDTO;
+import com.lottery.entity.CheckinRecord;
 import com.lottery.entity.User;
 import com.lottery.exception.BusinessException;
+import com.lottery.repository.CheckinRecordRepository;
 import com.lottery.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +17,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -25,6 +31,8 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final CheckinRecordRepository checkinRecordRepository;
+    private final Clock clock;
 
     /**
      * 用户登录（简化版，实际应使用Spring Security）
@@ -133,7 +141,7 @@ public class UserService {
                 .orElseThrow(() -> new BusinessException("用户不存在"));
 
         userRepository.incrementChances(userId, count);
-        
+
         User updated = userRepository.findById(userId).orElse(user);
         log.info("增加用户 {} 抽奖次数: +{}", user.getUsername(), count);
         return toDTO(updated);
@@ -146,7 +154,7 @@ public class UserService {
     public UserDTO toggleEnabled(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("用户不存在"));
-        
+
         user.setEnabled(!user.getEnabled());
         User saved = userRepository.save(user);
         log.info("切换用户状态: {} -> {}", user.getUsername(), saved.getEnabled() ? "启用" : "禁用");
@@ -163,6 +171,70 @@ public class UserService {
         }
         userRepository.deleteById(id);
         log.info("删除用户: ID {}", id);
+    }
+
+    /**
+     * 每日签到
+     */
+    @Transactional
+    public CheckinResultDTO dailyCheckin(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+
+        if (!user.getEnabled()) {
+            throw new BusinessException("用户已被禁用");
+        }
+
+        if (!"USER".equals(user.getRole())) {
+            throw new BusinessException("仅普通用户可签到");
+        }
+
+        LocalDate today = LocalDate.now(clock);
+        if (checkinRecordRepository.existsByUserIdAndCheckinDate(userId, today)) {
+            throw new BusinessException("今日已签到，请勿重复签到");
+        }
+
+        CheckinRecord record = CheckinRecord.builder()
+                .userId(userId)
+                .checkinDate(today)
+                .chancesRewarded(1)
+                .build();
+
+        try {
+            checkinRecordRepository.saveAndFlush(record);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException("今日已签到，请勿重复签到");
+        }
+
+        userRepository.incrementChances(userId, 1);
+
+        User updated = userRepository.findById(userId).orElseThrow();
+        log.info("用户 {} 每日签到成功，获得1次抽奖机会", user.getUsername());
+
+        return CheckinResultDTO.builder()
+                .checkedIn(true)
+                .remainingChances(updated.getRemainingChances())
+                .rewardedChances(1)
+                .message("签到成功，获得1次抽奖机会")
+                .build();
+    }
+
+    /**
+     * 获取签到状态
+     */
+    public CheckinResultDTO getCheckinStatus(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+
+        LocalDate today = LocalDate.now(clock);
+        boolean checkedIn = checkinRecordRepository.existsByUserIdAndCheckinDate(userId, today);
+
+        return CheckinResultDTO.builder()
+                .checkedIn(checkedIn)
+                .remainingChances(user.getRemainingChances())
+                .rewardedChances(0)
+                .message(checkedIn ? "今日已签到" : "今日未签到")
+                .build();
     }
 
     private UserDTO toDTO(User user) {

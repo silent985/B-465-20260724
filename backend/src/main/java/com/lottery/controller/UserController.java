@@ -1,6 +1,7 @@
 package com.lottery.controller;
 
 import com.lottery.dto.ApiResponse;
+import com.lottery.dto.CheckinResultDTO;
 import com.lottery.dto.UserDTO;
 import com.lottery.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -93,6 +94,22 @@ public class UserController {
             @Parameter(description = "用户ID") @PathVariable Long id) {
         UserDTO user = userService.toggleEnabled(id);
         return ApiResponse.success("状态切换成功", user);
+    }
+
+    @PostMapping("/{id}/checkin")
+    @Operation(summary = "每日签到", description = "用户每日签到，签到成功增加1次抽奖机会")
+    public ApiResponse<CheckinResultDTO> dailyCheckin(
+            @Parameter(description = "用户ID") @PathVariable Long id) {
+        CheckinResultDTO result = userService.dailyCheckin(id);
+        return ApiResponse.success(result.getMessage(), result);
+    }
+
+    @GetMapping("/{id}/checkin-status")
+    @Operation(summary = "获取签到状态", description = "获取用户今日签到状态")
+    public ApiResponse<CheckinResultDTO> getCheckinStatus(
+            @Parameter(description = "用户ID") @PathVariable Long id) {
+        CheckinResultDTO result = userService.getCheckinStatus(id);
+        return ApiResponse.success(result);
     }
 
     @DeleteMapping("/{id}")
