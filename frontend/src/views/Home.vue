@@ -51,6 +51,46 @@
         <p class="sub-title">每一次转动都是一次惊喜</p>
       </div>
 
+      <!-- 每日签到区域 -->
+      <div class="checkin-section glass-card" v-if="userStore.isLoggedIn && userStore.user?.role === 'USER'">
+        <div class="checkin-info">
+          <div class="checkin-left">
+            <span class="checkin-icon">📅</span>
+            <div class="checkin-text">
+              <div class="checkin-title">每日签到</div>
+              <div class="checkin-desc">
+                {{ checkedInToday ? '今日已签到，明天再来吧~' : '签到即可获得1次抽奖机会' }}
+              </div>
+            </div>
+          </div>
+          <div class="checkin-right">
+            <div class="chances-display">
+              <span class="chances-label">剩余次数</span>
+              <span class="chances-value">{{ userStore.remainingChances }}</span>
+            </div>
+            <el-button
+              v-if="!checkedInToday"
+              type="primary"
+              size="large"
+              :loading="checkinLoading"
+              @click="handleCheckin"
+              class="checkin-btn"
+            >
+              立即签到
+            </el-button>
+            <el-button
+              v-else
+              type="success"
+              size="large"
+              disabled
+              class="checkin-btn"
+            >
+              ✓ 已签到
+            </el-button>
+          </div>
+        </div>
+      </div>
+
       <!-- 中奖滚动公告 -->
       <div class="winner-marquee glass-card" v-if="recentWinners.length > 0">
         <div class="marquee-content">
@@ -147,7 +187,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { List, User, Setting, SwitchButton } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { getEnabledPrizes, getRecentWinners, drawLottery } from '@/api'
+import { getEnabledPrizes, getRecentWinners, drawLottery, dailyCheckin, getCheckinStatus } from '@/api'
 import LotteryWheel from '@/components/LotteryWheel.vue'
 import LotteryGrid from '@/components/LotteryGrid.vue'
 
@@ -161,6 +201,8 @@ const lotteryMode = ref('wheel')
 const isSpinning = ref(false)
 const showResultDialog = ref(false)
 const resultData = ref(null)
+const checkinLoading = ref(false)
+const checkedInToday = ref(false)
 
 // 组件引用
 const wheelRef = ref(null)
@@ -216,6 +258,61 @@ const loadRecentWinners = async () => {
     recentWinners.value = res.data
   } catch (e) {
     console.error('加载中奖记录失败:', e)
+  }
+}
+
+// 加载签到状态
+const loadCheckinStatus = async () => {
+  if (!userStore.isLoggedIn || userStore.user?.role !== 'USER') {
+    checkedInToday.value = false
+    return
+  }
+  try {
+    const res = await getCheckinStatus(userStore.user.id)
+    checkedInToday.value = res.data.checkedIn
+    if (res.data.remainingChances !== undefined) {
+      userStore.updateChances(res.data.remainingChances)
+    }
+  } catch (e) {
+    console.error('加载签到状态失败:', e)
+  }
+}
+
+// 每日签到
+const handleCheckin = async () => {
+  if (!userStore.isLoggedIn) {
+    ElMessageBox.confirm(
+      '您还未登录，请先登录后再签到！',
+      '温馨提示',
+      {
+        confirmButtonText: '去登录',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    ).then(() => {
+      router.push('/login')
+    }).catch(() => {})
+    return
+  }
+
+  if (userStore.user?.role !== 'USER') {
+    ElMessage.warning('仅普通用户可签到')
+    return
+  }
+
+  checkinLoading.value = true
+  try {
+    const res = await dailyCheckin(userStore.user.id)
+    checkedInToday.value = true
+    userStore.updateChances(res.data.remainingChances)
+    ElMessage.success(res.data.message || '签到成功')
+  } catch (e) {
+    console.error('签到失败:', e)
+    if (e.response?.data?.message?.includes('已签到')) {
+      checkedInToday.value = true
+    }
+  } finally {
+    checkinLoading.value = false
   }
 }
 
@@ -293,7 +390,9 @@ onMounted(() => {
   loadPrizes()
   loadRecentWinners()
   if (userStore.isLoggedIn) {
-    userStore.refreshUser()
+    userStore.refreshUser().then(() => {
+      loadCheckinStatus()
+    })
   }
 })
 </script>
@@ -424,6 +523,72 @@ onMounted(() => {
 .sub-title {
   color: var(--text-secondary);
   font-size: 16px;
+}
+
+// 每日签到
+.checkin-section {
+  margin-bottom: 24px;
+  padding: 20px 28px;
+}
+
+.checkin-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.checkin-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.checkin-icon {
+  font-size: 36px;
+}
+
+.checkin-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.checkin-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.checkin-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.chances-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.chances-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chances-value {
+  font-size: 28px;
+  font-weight: 800;
+  background: var(--gradient-accent);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.checkin-btn {
+  min-width: 120px;
+  font-weight: 600;
 }
 
 // 中奖滚动

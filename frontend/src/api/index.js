@@ -193,4 +193,18 @@ export const deleteUser = (id) => {
   return api.delete(`/users/${id}`)
 }
 
+/**
+ * 每日签到
+ */
+export const dailyCheckin = (userId) => {
+  return api.post(`/users/${userId}/checkin`)
+}
+
+/**
+ * 获取签到状态
+ */
+export const getCheckinStatus = (userId) => {
+  return api.get(`/users/${userId}/checkin-status`)
+}
+
 export default api

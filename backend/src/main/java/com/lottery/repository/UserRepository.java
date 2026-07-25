@@ -40,7 +40,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /**
      * 增加抽奖次数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE User u SET u.remainingChances = u.remainingChances + :count WHERE u.id = :userId")
     int incrementChances(@Param("userId") Long userId, @Param("count") int count);
 }
